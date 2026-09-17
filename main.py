@@ -56,7 +56,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from datetime import datetime, timezone
-from routers import documents, quizzes, tests, exams
+from .routers import documents, quizzes, tests, exams
 
 # Initialize FastAPI application instance with formal metadata
 app = FastAPI(
