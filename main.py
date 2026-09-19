@@ -56,7 +56,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from datetime import datetime, timezone
-from routers import documents, quizzes, tests, exams
+from routers import documents, quizzes, tests, exams, personal_ai, personal_ai_companion, ai_tutor, voice_ai, recommendations
 
 # Initialize FastAPI application instance with formal metadata
 app = FastAPI(
@@ -70,6 +70,11 @@ app.include_router(documents.router)
 app.include_router(quizzes.router)
 app.include_router(tests.router)
 app.include_router(exams.router)
+app.include_router(personal_ai.router)
+app.include_router(personal_ai_companion.router)
+app.include_router(ai_tutor.router)
+app.include_router(voice_ai.router)
+app.include_router(recommendations.router)
 
 @app.get("/")
 def read_root():
