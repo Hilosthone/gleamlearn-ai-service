@@ -1,3 +1,4 @@
+```markdown
 # GleamLearn AI Microservice
 
 FastAPI-powered microservice responsible for AI-driven document parsing, text analysis, and automated study material generation (summaries, notes, flashcards, quizzes, exams, and interactive live AI classes) for the GleamLearn platform.
@@ -9,6 +10,7 @@ FastAPI-powered microservice responsible for AI-driven document parsing, text an
 * **Framework:** FastAPI (Python)
 * **Server:** Uvicorn (ASGI)
 * **Validation:** Pydantic v2
+* **Rate Limiting:** Slowapi (IP-based request throttling)
 * **AI Provider:** OpenAI API (GPT-4o-mini)
 * **Authentication:** Bearer Token (`AI_API_KEY`)
 
@@ -40,7 +42,7 @@ FastAPI-powered microservice responsible for AI-driven document parsing, text an
 1. **Clone the repository:**
 
 ```bash
-git clone https://github.com/Hilosthone/gleamlearn-ai-service.git
+git clone [https://github.com/Hilosthone/gleamlearn-ai-service.git](https://github.com/Hilosthone/gleamlearn-ai-service.git)
 cd gleamlearn-ai-service
 
 ```
@@ -76,7 +78,7 @@ uvicorn main:app --reload --port 8000
 
 ```
 
-Access the interactive Swagger documentation at: `[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)`
+Access the interactive Swagger documentation at: `http://127.0.0.1:8000/docs`
 
 ---
 
@@ -96,3 +98,7 @@ Access the interactive Swagger documentation at: `[http://127.0.0.1:8000/docs](h
 3. Set the **Build Command**: `pip install -r requirements.txt`
 4. Set the **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 5. Add your `AI_API_KEY` and `OPENAI_API_KEY` under the Environment variables tab.
+
+```
+
+```

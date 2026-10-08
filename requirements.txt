@@ -5,9 +5,19 @@
 # pydantic
 
 
+# fastapi
+# uvicorn
+# pydantic
+# openai
+# requests
+# python-dotenv
+
+
 fastapi
 uvicorn
 pydantic
 openai
 requests
 python-dotenv
+slowapi
+youtube-transcript-api
