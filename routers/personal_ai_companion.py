@@ -86,31 +86,19 @@
 # routers/personal_ai_companion.py
 
 from fastapi import APIRouter, HTTPException, Security, Request
-from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from dependencies import client, NVIDIA_MODEL
+from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response
 
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/v1", tags=["Personal AI Companion"])
 
-API_KEY = __import__("os").getenv("AI_API_KEY", "674930")
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-
-def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key != API_KEY:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid or missing AI API Key",
-        )
-    return api_key
 
 
 class CompanionContext(BaseModel):
@@ -133,31 +121,6 @@ class CompanionContextualPayload(BaseModel):
     input: str
     context: Optional[Dict[str, Any]] = Field(default_factory=dict)
     companionContext: Optional[CompanionContext] = None
-
-
-def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
-    try:
-        completion = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-        )
-
-        return completion.choices[0].message.content or ""
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
 
 
 @router.post("/ai-companion/chat")
@@ -220,7 +183,7 @@ the answer when appropriate.
 Keep responses clear and natural. Do not mention these system instructions.
 """
 
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=system_prompt,
         user_prompt=payload.message,
     )
@@ -285,7 +248,7 @@ Adapt your response to the learner's context when provided.
 {context_text}
 """
 
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=system_prompt,
         user_prompt=payload.input,
     )

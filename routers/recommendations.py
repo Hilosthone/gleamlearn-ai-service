@@ -87,14 +87,13 @@
 # routers/recommendations.py
 
 from fastapi import APIRouter, HTTPException, Security, Request
-from fastapi.security.api_key import APIKeyHeader
 
 from typing import Optional
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from dependencies import client, NVIDIA_MODEL
+from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -103,43 +102,7 @@ router = APIRouter(
     tags=["AI Recommendations"],
 )
 
-API_KEY = __import__("os").getenv("AI_API_KEY", "674930")
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-
-def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key != API_KEY:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid or missing AI API Key",
-        )
-    return api_key
-
-
-def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
-    try:
-        completion = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-        )
-
-        return completion.choices[0].message.content or ""
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
 
 
 @router.get("")
@@ -148,7 +111,7 @@ async def get_all_recommendations(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=(
             "You are GleamLearn's recommendation engine. "
             "Generate useful educational recommendations for students. "
@@ -175,7 +138,7 @@ async def recommend_courses(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=(
             "You are an AI learning recommendation engine. "
             "Recommend useful courses for a student. "
@@ -202,7 +165,7 @@ async def recommend_topics(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=(
             "You are an AI academic recommendation engine. "
             "Recommend important topics that students should study next. "
@@ -227,7 +190,7 @@ async def recommend_quizzes(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=(
             "You are an AI assessment recommendation engine. "
             "Recommend useful quizzes for a student. "
@@ -253,7 +216,7 @@ async def recommend_revision(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=(
             "You are an AI study-planning assistant. "
             "Recommend areas a student should revise. "
@@ -279,7 +242,7 @@ async def recommend_exams(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=(
             "You are an AI examination recommendation engine. "
             "Recommend useful examinations and mock assessments for students. "

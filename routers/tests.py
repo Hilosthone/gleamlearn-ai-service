@@ -91,7 +91,7 @@ from typing import Optional
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from dependencies import client, NVIDIA_MODEL, verify_token, fetch_document_text
+from dependencies import client, NVIDIA_MODEL, verify_token, fetch_document_text, generate_ai_response as shared_generate_ai_response
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -108,44 +108,17 @@ class TestGenPayload(BaseModel):
     num_questions: Optional[int] = Field(default=15, ge=1, le=100)
 
 
-def generate_test_with_ai(prompt: str):
-    try:
-        response = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
+async def generate_test_with_ai(prompt: str):
+    return await shared_generate_ai_response(
+        system_prompt=(
                         "You are an expert AI academic assessment generator "
                         "for GleamLearn. Create high-quality tests that "
                         "accurately assess student understanding, application, "
                         "analysis, and recall."
                     ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-        )
-
-        content = response.choices[0].message.content
-
-        if not content:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="NVIDIA AI returned an empty response.",
-            )
-
-        return content
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"NVIDIA AI test generation failed: {str(e)}",
-        )
+        user_prompt=prompt,
+        require_content=True,
+    )
 
 
 def parse_json_response(content: str):
@@ -194,7 +167,7 @@ Return ONLY valid JSON using this structure:
 Make the questions academically useful and avoid duplicates.
 """
 
-    content = generate_test_with_ai(prompt)
+    content = await generate_test_with_ai(prompt)
 
     return {
         "status": "success",
@@ -249,7 +222,7 @@ Return ONLY valid JSON using this structure:
 Cover the major concepts that should be assessed in the course.
 """
 
-    content = generate_test_with_ai(prompt)
+    content = await generate_test_with_ai(prompt)
 
     return {
         "status": "success",
@@ -278,7 +251,7 @@ async def generate_test_from_document(
             detail="fileUrl is required for document-based test generation.",
         )
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
     prompt = f"""
 Generate a comprehensive academic test using ONLY the information
@@ -319,7 +292,7 @@ Do not introduce facts that are not supported by the document.
 Avoid duplicate questions and cover the important concepts.
 """
 
-    content = generate_test_with_ai(prompt)
+    content = await generate_test_with_ai(prompt)
 
     return {
         "status": "success",

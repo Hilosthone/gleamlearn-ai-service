@@ -83,47 +83,18 @@
 import os
 
 from fastapi import APIRouter, HTTPException, Security, Request
-from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from openai import OpenAI
+from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response
 
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/v1/ai-tutor", tags=["AI Tutor Classroom"])
 
-API_KEY = os.getenv("AI_API_KEY", "674930")
-
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
-NVIDIA_BASE_URL = os.getenv(
-    "NVIDIA_BASE_URL",
-    "https://integrate.api.nvidia.com/v1",
-)
-NVIDIA_MODEL = os.getenv(
-    "NVIDIA_MODEL",
-    "z-ai/glm-5-3-flash",
-)
-
-if not NVIDIA_API_KEY:
-    raise RuntimeError("NVIDIA_API_KEY is not configured")
-
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-client = OpenAI(
-    api_key=NVIDIA_API_KEY,
-    base_url=NVIDIA_BASE_URL,
-)
 
 
-def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key != API_KEY:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid or missing AI API Key",
-        )
-    return api_key
 
 
 class TutorPayload(BaseModel):
@@ -131,31 +102,6 @@ class TutorPayload(BaseModel):
     sessionId: Optional[str] = None
     input: Optional[str] = None
     context: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-
-def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
-    try:
-        completion = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-        )
-
-        return completion.choices[0].message.content or ""
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
 
 
 @router.post("/message")
@@ -171,7 +117,7 @@ async def tutor_message(
     if payload.context:
         context = f"\nAdditional context:\n{payload.context}"
 
-    response = generate_ai_response(
+    response = await generate_ai_response(
         system_prompt=(
             "You are GleamLearn's AI Classroom Tutor. "
             "Teach students clearly, accurately, patiently, and step-by-step. "
@@ -203,7 +149,7 @@ async def ai_teach(
     if payload.context:
         context = f"\nAdditional context:\n{payload.context}"
 
-    lesson = generate_ai_response(
+    lesson = await generate_ai_response(
         system_prompt=(
             "You are an expert educational tutor for GleamLearn. "
             "Generate a structured lesson that helps a student understand "
@@ -235,7 +181,7 @@ async def ai_tutor_explain(
     if payload.context:
         context = f"\nAdditional context:\n{payload.context}"
 
-    explanation = generate_ai_response(
+    explanation = await generate_ai_response(
         system_prompt=(
             "You are GleamLearn's AI tutor. "
             "Explain concepts in a way that makes them easy to understand "
@@ -263,7 +209,7 @@ async def ai_generate_diagram(
 ):
     target = payload.input or payload.message or "System"
 
-    diagram = generate_ai_response(
+    diagram = await generate_ai_response(
         system_prompt=(
             "You generate educational Mermaid diagrams. "
             "Return only valid Mermaid diagram code. "
@@ -296,7 +242,7 @@ async def ai_drawing_instructions(
 ):
     target = payload.input or payload.message or "Concept"
 
-    instructions = generate_ai_response(
+    instructions = await generate_ai_response(
         system_prompt=(
             "You are an educational visual-learning tutor. "
             "Create clear, sequential drawing instructions that help "

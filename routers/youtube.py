@@ -1,18 +1,18 @@
 # routers/youtube.py
 
+import asyncio
 import os
 import json
 import requests
 
 from fastapi import APIRouter, Depends, HTTPException, Security, Request, status
-from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, Dict, Any
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from dependencies import client, NVIDIA_MODEL
+from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response as shared_generate_ai_response
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -21,60 +21,25 @@ router = APIRouter(
     tags=["YouTube Learning Material"],
 )
 
-API_KEY = os.getenv("AI_API_KEY", "674930")
-
-api_key_header = APIKeyHeader(
-    name="X-API-Key",
-    auto_error=False,
-)
 
 
-def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key != API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid or missing AI API Key",
-        )
-    return api_key
+
+MAX_TRANSCRIPT_CHARS = 30000
 
 
 class YouTubeResourcePayload(BaseModel):
     url: HttpUrl
+    # Optional: transcript already fetched by the NestJS backend. When present it is
+    # used directly, avoiding a second fetch from YouTube.
+    transcript: Optional[str] = None
 
 
-def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
-    try:
-        response = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-        )
-
-        content = response.choices[0].message.content
-
-        if not content:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="NVIDIA AI returned an empty response.",
-            )
-
-        return content
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
+async def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
+    return await shared_generate_ai_response(
+        system_prompt,
+        user_prompt,
+        require_content=True,
+    )
 
 
 def parse_ai_json(content: str):
@@ -104,8 +69,14 @@ def extract_video_id(url: str) -> Optional[str]:
 
 
 def fetch_youtube_transcript(url: str) -> str:
+    """
+    Fetches a transcript with youtube-transcript-api v1.x
+    (the v0 `YouTubeTranscriptApi.get_transcript` class method no longer exists).
+    Prefers English; otherwise falls back to the first available transcript.
+    """
+
     try:
-        from youtube_transcript_api import YouTubeTranscriptApi
+        from youtube_transcript_api import NoTranscriptFound, YouTubeTranscriptApi
 
         video_id = extract_video_id(url)
 
@@ -115,12 +86,20 @@ def fetch_youtube_transcript(url: str) -> str:
                 detail="Invalid YouTube URL.",
             )
 
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
+        api = YouTubeTranscriptApi()
+
+        try:
+            fetched = api.fetch(video_id, languages=["en"])
+        except NoTranscriptFound:
+            available = next(iter(api.list(video_id)), None)
+            if available is None:
+                raise
+            fetched = available.fetch()
 
         return " ".join(
-            item.get("text", "")
-            for item in transcript
-        )[:30000]
+            snippet.text
+            for snippet in fetched
+        )[:MAX_TRANSCRIPT_CHARS]
 
     except HTTPException:
         raise
@@ -129,6 +108,16 @@ def fetch_youtube_transcript(url: str) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to retrieve YouTube transcript: {str(e)}",
         )
+
+
+async def resolve_transcript(payload: YouTubeResourcePayload) -> str:
+    """Uses the transcript supplied by the backend when present, otherwise fetches it."""
+
+    supplied = (payload.transcript or "").strip()
+    if supplied:
+        return supplied[:MAX_TRANSCRIPT_CHARS]
+
+    return await asyncio.to_thread(fetch_youtube_transcript, str(payload.url))
 
 
 @router.post("")
@@ -228,7 +217,7 @@ async def process_resource(
             detail="Invalid YouTube URL.",
         )
 
-    transcript = fetch_youtube_transcript(str(payload.url))
+    transcript = await resolve_transcript(payload)
 
     if not transcript:
         raise HTTPException(
@@ -290,7 +279,7 @@ Do not introduce information that is not supported by the transcript.
 Make the material clear and suitable for students.
 """
 
-    content = generate_ai_response(
+    content = await generate_ai_response(
         system_prompt=(
             "You are GleamLearn's AI educational content processor. "
             "Transform educational video transcripts into structured, "
@@ -324,7 +313,7 @@ async def reprocess_resource(
             detail="Invalid YouTube URL.",
         )
 
-    transcript = fetch_youtube_transcript(str(payload.url))
+    transcript = await resolve_transcript(payload)
 
     if not transcript:
         raise HTTPException(
@@ -362,7 +351,7 @@ Improve clarity, organization, educational usefulness, and accuracy.
 Do not invent information that is not supported by the transcript.
 """
 
-    content = generate_ai_response(
+    content = await generate_ai_response(
         system_prompt=(
             "You are an expert educational content editor for GleamLearn. "
             "Reprocess and improve learning materials generated from "

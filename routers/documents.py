@@ -234,6 +234,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from dependencies import (
+    generate_ai_response,
     client,
     NVIDIA_MODEL,
     AiRequest,
@@ -244,33 +245,6 @@ from dependencies import (
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/v1", tags=["Document AI Pipeline"])
-
-
-def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
-    try:
-        completion = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-        )
-
-        return completion.choices[0].message.content or ""
-
-    except Exception as e:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=502,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
 
 
 @router.post("/ai/documents/{file_id}/analyze")
@@ -284,9 +258,9 @@ async def analyze_document(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    analysis = generate_ai_response(
+    analysis = await generate_ai_response(
         system_prompt=(
             "You are an expert academic AI tutor for GleamLearn. "
             "Provide a deep, structured analysis of the document. "
@@ -333,9 +307,9 @@ async def generate_notes(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    notes = generate_ai_response(
+    notes = await generate_ai_response(
         system_prompt=(
             "You are an expert academic tutor. "
             "Generate comprehensive, well-structured study notes from "
@@ -367,9 +341,9 @@ async def generate_summary(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    summary = generate_ai_response(
+    summary = await generate_ai_response(
         system_prompt=(
             "You are an expert academic summarization assistant. "
             "Create a concise but complete summary of the provided "
@@ -400,9 +374,9 @@ async def generate_flashcards(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    flashcards = generate_ai_response(
+    flashcards = await generate_ai_response(
         system_prompt=(
             "You are an expert educational content generator. "
             "Generate useful study flashcards from the provided document. "
@@ -435,9 +409,9 @@ async def generate_questions(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    questions = generate_ai_response(
+    questions = await generate_ai_response(
         system_prompt=(
             "You are an expert academic assessment generator. "
             "Generate important study questions based strictly on the "
@@ -468,9 +442,9 @@ async def generate_quiz(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    quiz = generate_ai_response(
+    quiz = await generate_ai_response(
         system_prompt=(
             "You are an expert academic quiz generator for GleamLearn. "
             "Generate a multiple-choice quiz based strictly on the document. "
@@ -503,9 +477,9 @@ async def generate_test(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    test = generate_ai_response(
+    test = await generate_ai_response(
         system_prompt=(
             "You are an expert academic assessment designer. "
             "Generate a comprehensive test based strictly on the document. "
@@ -536,9 +510,9 @@ async def generate_exam(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    exam = generate_ai_response(
+    exam = await generate_ai_response(
         system_prompt=(
             "You are an expert university and secondary-school examination "
             "designer. Generate a rigorous, full-length examination based "
@@ -570,9 +544,9 @@ async def create_course(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    course = generate_ai_response(
+    course = await generate_ai_response(
         system_prompt=(
             "You are an expert instructional designer for GleamLearn. "
             "Transform the provided document into a structured learning "
@@ -619,9 +593,9 @@ async def generate_live_class(
 ):
     verify_token(authorization)
 
-    doc_text = fetch_document_text(payload.fileUrl)
+    doc_text = await fetch_document_text(payload.fileUrl)
 
-    live_class = generate_ai_response(
+    live_class = await generate_ai_response(
         system_prompt=(
             "You are an expert AI instructor and educational content "
             "designer. Convert the provided document into a structured "

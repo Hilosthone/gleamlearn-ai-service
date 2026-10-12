@@ -59,31 +59,19 @@
 import os
 
 from fastapi import APIRouter, HTTPException, Security, Request
-from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from dependencies import client, NVIDIA_MODEL
+from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response as shared_generate_ai_response
 
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/v1/ai/voice", tags=["Voice AI"])
 
-API_KEY = os.getenv("AI_API_KEY", "674930")
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-
-def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key != API_KEY:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid or missing AI API Key",
-        )
-    return api_key
 
 
 class VoicePayload(BaseModel):
@@ -92,39 +80,12 @@ class VoicePayload(BaseModel):
     voiceId: Optional[str] = "default"
 
 
-def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
-    try:
-        response = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-        )
-
-        content = response.choices[0].message.content
-
-        if not content:
-            raise HTTPException(
-                status_code=502,
-                detail="NVIDIA AI returned an empty response.",
-            )
-
-        return content
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
+async def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
+    return await shared_generate_ai_response(
+        system_prompt,
+        user_prompt,
+        require_content=True,
+    )
 
 
 @router.post("/transcribe")
@@ -168,7 +129,7 @@ async def voice_respond(
             detail="text is required for voice response generation.",
         )
 
-    response_text = generate_ai_response(
+    response_text = await generate_ai_response(
         system_prompt=(
             "You are GleamLearn's voice AI assistant. "
             "Respond naturally, clearly, and concisely. "

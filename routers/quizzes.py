@@ -179,7 +179,7 @@ from datetime import datetime, timezone
 
 import requests
 from fastapi import APIRouter, Header, HTTPException, Request
-from openai import OpenAI
+from dependencies import client, NVIDIA_MODEL, verify_token, generate_ai_response, fetch_document_text
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -191,41 +191,6 @@ router = APIRouter(
     prefix="/api/v1/quizzes",
     tags=["Quiz System"],
 )
-
-# Shared secret between NestJS Backend and FastAPI AI Service
-AI_API_KEY = os.getenv(
-    "AI_API_KEY",
-    "your_secret_token",
-)
-
-# NVIDIA NIM configuration
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
-
-NVIDIA_BASE_URL = os.getenv(
-    "NVIDIA_BASE_URL",
-    "https://integrate.api.nvidia.com/v1",
-)
-
-NVIDIA_MODEL = os.getenv(
-    "NVIDIA_MODEL",
-    "z-ai/glm-5-3-flash",
-)
-
-
-if not NVIDIA_API_KEY:
-    raise RuntimeError(
-        "NVIDIA_API_KEY is not configured."
-    )
-
-# NVIDIA NIM provides an OpenAI-compatible API,
-# so we can use the OpenAI Python SDK while pointing
-# it to NVIDIA's API endpoint.
-
-client = OpenAI(
-    api_key=NVIDIA_API_KEY,
-    base_url=NVIDIA_BASE_URL,
-)
-
 
 class QuizRequest(BaseModel, extra="allow"):
     title: str | None = None
@@ -249,86 +214,6 @@ class QuizSubmitRequest(BaseModel, extra="allow"):
         default_factory=dict
     )
 
-
-def verify_token(
-    authorization: str = Header(None),
-):
-    """
-    Validates the internal shared bearer token
-    sent by the NestJS backend gateway.
-    """
-
-    if AI_API_KEY and authorization != f"Bearer {AI_API_KEY}":
-        raise HTTPException(
-            status_code=401,
-            detail="Unauthorized AI token",
-        )
-
-
-def fetch_document_text(
-    file_url: str,
-) -> str:
-    """
-    Downloads document content from the supplied URL.
-
-    NOTE:
-    This currently assumes the URL returns readable text.
-    If the URL points to a PDF, DOCX, etc., use a proper
-    document extraction pipeline instead.
-    """
-
-    if not file_url:
-        raise HTTPException(
-            status_code=400,
-            detail="Document file URL is required.",
-        )
-
-    try:
-        response = requests.get(
-            file_url,
-            timeout=30,
-        )
-
-        response.raise_for_status()
-
-        return response.text[:15000]
-
-    except requests.RequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to fetch document content: {str(e)}",
-        )
-
-def generate_ai_response(
-    system_prompt: str,
-    user_prompt: str,
-):
-    """
-    Sends a prompt to the configured NVIDIA NIM model.
-    """
-
-    try:
-        completion = client.chat.completions.create(
-            model=NVIDIA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
-        )
-
-        return completion.choices[0].message.content
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
 
 @router.get("")
 @limiter.limit("20/minute")
@@ -420,7 +305,7 @@ async def generate_quiz_general(
 
     verify_token(authorization)
 
-    quiz = generate_ai_response(
+    quiz = await generate_ai_response(
         system_prompt=(
             "You are an expert educational assessment generator. "
             "Generate a structured multiple-choice quiz in JSON format. "
@@ -453,7 +338,7 @@ async def generate_quiz_from_course(
 
     verify_token(authorization)
 
-    quiz = generate_ai_response(
+    quiz = await generate_ai_response(
         system_prompt=(
             "You are an expert educational assessment generator. "
             "Generate a rigorous multi-question quiz that tests "
@@ -489,12 +374,12 @@ async def generate_quiz_from_document(
     verify_token(authorization)
 
     doc_text = (
-        fetch_document_text(payload.fileUrl)
+        await fetch_document_text(payload.fileUrl)
         if payload.fileUrl
         else "Sample document content"
     )
 
-    quiz = generate_ai_response(
+    quiz = await generate_ai_response(
         system_prompt=(
             "You are an expert educational assessment generator. "
             "Generate a detailed multiple-choice quiz based strictly "
@@ -529,7 +414,7 @@ async def generate_quiz_from_topic(
 
     verify_token(authorization)
 
-    quiz = generate_ai_response(
+    quiz = await generate_ai_response(
         system_prompt=(
             "You are an expert educational assessment generator. "
             "Generate a targeted academic quiz centered on the "
