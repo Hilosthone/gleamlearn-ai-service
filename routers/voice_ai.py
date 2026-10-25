@@ -65,7 +65,7 @@ from typing import Optional
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response as shared_generate_ai_response
+from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response as shared_generate_ai_response, feature_unavailable
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -95,23 +95,7 @@ async def voice_transcribe(
     payload: VoicePayload,
     api_key: str = Security(verify_api_key),
 ):
-    if not payload.audioData and not payload.text:
-        raise HTTPException(
-            status_code=400,
-            detail="Either audioData or text is required.",
-        )
-
-    if payload.text:
-        return {
-            "status": "success",
-            "transcript": payload.text,
-        }
-
-    return {
-        "status": "success",
-        "transcript": "",
-        "message": "Audio transcription requires a speech-to-text provider.",
-    }
+    raise feature_unavailable("Speech transcription", "no speech-to-text provider is configured")
 
 
 @router.post("/respond")
@@ -154,16 +138,4 @@ async def voice_synthesize(
     payload: VoicePayload,
     api_key: str = Security(verify_api_key),
 ):
-    if not payload.text:
-        raise HTTPException(
-            status_code=400,
-            detail="text is required for speech synthesis.",
-        )
-
-    return {
-        "status": "success",
-        "voiceId": payload.voiceId,
-        "text": payload.text,
-        "audioUrl": None,
-        "message": "Text-to-speech provider is required to generate audio.",
-    }
+    raise feature_unavailable("Speech synthesis", "no text-to-speech provider is configured")

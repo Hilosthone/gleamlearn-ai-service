@@ -93,7 +93,7 @@ from typing import Optional
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response
+from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response, feature_unavailable
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -111,25 +111,7 @@ async def get_all_recommendations(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = await generate_ai_response(
-        system_prompt=(
-            "You are GleamLearn's recommendation engine. "
-            "Generate useful educational recommendations for students. "
-            "Return ONLY valid JSON with four arrays: courses, topics, "
-            "quizzes, and revision. Keep recommendations practical and "
-            "academically useful."
-        ),
-        user_prompt=(
-            "Generate a balanced set of learning recommendations covering "
-            "courses, topics to study, quizzes to practice, and revision areas. "
-            "Use modern computer science and general academic learning topics."
-        ),
-    )
-
-    return {
-        "status": "success",
-        "recommendations": response,
-    }
+    raise feature_unavailable("Personalised recommendations", "recommendations are not yet computed from the catalogue and the learner's progress")
 
 
 @router.get("/courses")
@@ -138,25 +120,7 @@ async def recommend_courses(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = await generate_ai_response(
-        system_prompt=(
-            "You are an AI learning recommendation engine. "
-            "Recommend useful courses for a student. "
-            "Return ONLY valid JSON containing a 'courses' array. "
-            "Each item must contain: id, title, description, matchScore, "
-            "and difficulty."
-        ),
-        user_prompt=(
-            "Recommend five valuable courses covering software engineering, "
-            "web development, mobile development, backend engineering, "
-            "AI engineering, and computer science."
-        ),
-    )
-
-    return {
-        "status": "success",
-        "data": response,
-    }
+    raise feature_unavailable("Personalised recommendations", "recommendations are not yet computed from the catalogue and the learner's progress")
 
 
 @router.get("/topics")
@@ -165,23 +129,7 @@ async def recommend_topics(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = await generate_ai_response(
-        system_prompt=(
-            "You are an AI academic recommendation engine. "
-            "Recommend important topics that students should study next. "
-            "Return ONLY valid JSON containing a 'topics' array."
-        ),
-        user_prompt=(
-            "Generate five useful study topics covering programming, "
-            "software engineering, databases, backend development, "
-            "AI engineering, and computer science fundamentals."
-        ),
-    )
-
-    return {
-        "status": "success",
-        "data": response,
-    }
+    raise feature_unavailable("Personalised recommendations", "recommendations are not yet computed from the catalogue and the learner's progress")
 
 
 @router.get("/quizzes")
@@ -190,24 +138,7 @@ async def recommend_quizzes(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = await generate_ai_response(
-        system_prompt=(
-            "You are an AI assessment recommendation engine. "
-            "Recommend useful quizzes for a student. "
-            "Return ONLY valid JSON containing a 'quizzes' array. "
-            "Each item must contain: quizId, title, difficulty, and reason."
-        ),
-        user_prompt=(
-            "Generate five quiz recommendations covering programming, "
-            "web development, backend engineering, databases, AI, "
-            "and computer science."
-        ),
-    )
-
-    return {
-        "status": "success",
-        "data": response,
-    }
+    raise feature_unavailable("Personalised recommendations", "recommendations are not yet computed from the catalogue and the learner's progress")
 
 
 @router.get("/revision")
@@ -216,24 +147,7 @@ async def recommend_revision(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = await generate_ai_response(
-        system_prompt=(
-            "You are an AI study-planning assistant. "
-            "Recommend areas a student should revise. "
-            "Return ONLY valid JSON containing a 'revision' array. "
-            "Each item must contain: focusArea, priority, reason, "
-            "and suggestedAction."
-        ),
-        user_prompt=(
-            "Generate five useful revision recommendations for a student "
-            "studying computer science and software engineering."
-        ),
-    )
-
-    return {
-        "status": "success",
-        "data": response,
-    }
+    raise feature_unavailable("Personalised recommendations", "recommendations are not yet computed from the catalogue and the learner's progress")
 
 
 @router.get("/exams")
@@ -242,22 +156,4 @@ async def recommend_exams(
     request: Request,
     api_key: str = Security(verify_api_key),
 ):
-    response = await generate_ai_response(
-        system_prompt=(
-            "You are an AI examination recommendation engine. "
-            "Recommend useful examinations and mock assessments for students. "
-            "Return ONLY valid JSON containing an 'exams' array. "
-            "Each item must contain: examId, title, description, "
-            "estimatedDuration, and difficulty."
-        ),
-        user_prompt=(
-            "Generate five useful mock examinations covering software "
-            "engineering, programming, backend development, databases, "
-            "AI engineering, and computer science."
-        ),
-    )
-
-    return {
-        "status": "success",
-        "data": response,
-    }
+    raise feature_unavailable("Personalised recommendations", "recommendations are not yet computed from the catalogue and the learner's progress")

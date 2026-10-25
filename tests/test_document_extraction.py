@@ -108,7 +108,7 @@ class FetchPipelineTests(unittest.TestCase):
         fake_response.iter_content.return_value = [b"x" * (dependencies.MAX_DOCUMENT_BYTES + 1)]
         with patch.object(dependencies.requests, "get", return_value=fake_response):
             with self.assertRaises(HTTPException) as ctx:
-                dependencies._download_document("https://example.invalid/doc.pdf")
+                dependencies._download_document("https://res.cloudinary.com/demo/big.pdf")
         self.assertEqual(ctx.exception.status_code, 413)
 
 

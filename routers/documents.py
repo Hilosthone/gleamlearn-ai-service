@@ -240,6 +240,7 @@ from dependencies import (
     AiRequest,
     verify_token,
     fetch_document_text,
+    feature_unavailable,
 )
 
 limiter = Limiter(key_func=get_remote_address)
@@ -289,11 +290,7 @@ async def get_document_analysis(
 ):
     verify_token(authorization)
 
-    return {
-        "status": "success",
-        "fileId": file_id,
-        "message": "Retrieved cached document analysis successfully.",
-    }
+    raise feature_unavailable("Saved document analysis", "analysis results are not stored by the AI service; the analyze response returns them")
 
 
 @router.post("/ai/documents/{file_id}/generate-notes")
@@ -576,11 +573,7 @@ async def get_generated_content(
 ):
     verify_token(authorization)
 
-    return {
-        "status": "success",
-        "fileId": file_id,
-        "message": "Retrieved all generated assets for this document.",
-    }
+    raise feature_unavailable("Saved generated content", "generated content is not stored by the AI service; each generate response returns it")
 
 
 @router.post("/ai/documents/{file_id}/generate-live-class")
@@ -635,16 +628,7 @@ async def get_live_class_stream(
 ):
     verify_token(authorization)
 
-    return {
-        "status": "success",
-        "fileId": file_id,
-        "streamStatus": "ready",
-        "message": (
-            "Live class streaming metadata active. "
-            "Supports playback controls, zoom states, "
-            "and real-time caption sync."
-        ),
-    }
+    raise feature_unavailable("Live class streaming", "streaming is not implemented; generate-live-class returns the class content")
 
 
 @router.post("/ai/documents/{file_id}/export-pdf")
@@ -657,12 +641,4 @@ async def export_pdf(
 ):
     verify_token(authorization)
 
-    return {
-        "status": "success",
-        "fileId": file_id,
-        "downloadUrl": (
-            f"https://storage.supabase.co/storage/v1/object/public/"
-            f"gleamlearn-exports/{file_id}-export.pdf"
-        ),
-        "message": "Document successfully compiled and ready for PDF download.",
-    }
+    raise feature_unavailable("PDF export", "no PDF is generated or stored")

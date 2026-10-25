@@ -9,7 +9,7 @@ import main
 client = TestClient(main.app)
 
 # Placeholder routes that never call the model provider
-BEARER_ROUTE = "/api/v1/ai/documents/file-1/analysis"  # previously Bearer-only
+BEARER_ROUTE = "/api/v1/quizzes"  # handler-level verify_token (Bearer-only before); analysis now answers 501
 X_API_KEY_ROUTE = "/api/v1/youtube"  # previously X-API-Key-only
 
 

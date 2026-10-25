@@ -38,6 +38,7 @@ import hmac
 import io
 import os
 import zipfile
+from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
 
 import requests
@@ -182,6 +183,23 @@ def verify_token(
     return True
 
 
+def feature_unavailable(feature: str, reason: str) -> HTTPException:
+    """
+    The one response for capabilities that are not implemented: HTTP 501 with
+    `detail = {"code": "FEATURE_UNAVAILABLE", "feature": ..., "message": ...}`.
+    Raised after authentication and before any work, so nothing is generated or stored
+    and no fabricated data (download URLs, empty "success" payloads) is returned.
+    """
+    return HTTPException(
+        status_code=501,
+        detail={
+            "code": "FEATURE_UNAVAILABLE",
+            "feature": feature,
+            "message": f"{feature} is not available yet: {reason}.",
+        },
+    )
+
+
 # ============================================================
 # Document Fetching
 # ============================================================
@@ -197,13 +215,70 @@ _DOCX_TYPES = (
 )
 
 
-def _download_document(file_url: str) -> tuple[bytes, str]:
+# Hosts the service may download study documents from (comma-separated). Default: Cloudinary, where the
+# backend stores uploads. A leading "." allows subdomains (".example.com"). SSRF protection: the shared
+# AI_API_KEY alone must not let a caller make this service fetch internal or arbitrary URLs.
+ALLOWED_DOCUMENT_HOSTS = [
+    h.strip().lower()
+    for h in os.getenv("ALLOWED_DOCUMENT_HOSTS", "res.cloudinary.com").split(",")
+    if h.strip()
+]
+MAX_DOCUMENT_REDIRECTS = 3
+
+
+def _validate_document_url(url: str) -> None:
+    """Only https URLs on an allowed storage host, without credentials or unusual ports."""
     try:
-        with requests.get(
-            file_url,
-            timeout=DOCUMENT_FETCH_TIMEOUT_SECONDS,
-            stream=True,
-        ) as response:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        port = -1
+        parts = None
+    host = (parts.hostname or "").lower() if parts else ""
+    allowed = any(
+        host == h or (h.startswith(".") and host.endswith(h)) for h in ALLOWED_DOCUMENT_HOSTS
+    )
+    if (
+        not parts
+        or parts.scheme != "https"
+        or not allowed
+        or parts.username is not None
+        or parts.password is not None
+        or port not in (None, 443)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Document URL is not from an allowed storage location.",
+        )
+
+
+def _download_document(file_url: str) -> tuple[bytes, str]:
+    url = file_url
+    # Redirects are followed manually (at most MAX_DOCUMENT_REDIRECTS) so that every hop is validated
+    for _ in range(MAX_DOCUMENT_REDIRECTS + 1):
+        _validate_document_url(url)
+        try:
+            response = requests.get(
+                url,
+                timeout=DOCUMENT_FETCH_TIMEOUT_SECONDS,
+                stream=True,
+                allow_redirects=False,
+            )
+        except Exception:
+            # Generic message: echoing the network error would help someone probe internal hosts
+            raise HTTPException(status_code=400, detail="Failed to fetch document content.")
+        if getattr(response, "is_redirect", False) is True:
+            location = response.headers.get("Location") or ""
+            response.close()
+            url = urljoin(url, location)
+            continue
+        return _read_document_response(response)
+    raise HTTPException(status_code=400, detail="Failed to fetch document content (too many redirects).")
+
+
+def _read_document_response(response) -> tuple[bytes, str]:
+    try:
+        with response:
             response.raise_for_status()
             content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
 
@@ -222,10 +297,10 @@ def _download_document(file_url: str) -> tuple[bytes, str]:
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to fetch document content: {str(e)}",
+            detail="Failed to fetch document content.",
         )
 
 
