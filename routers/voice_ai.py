@@ -67,7 +67,8 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response as shared_generate_ai_response, feature_unavailable
 
-limiter = Limiter(key_func=get_remote_address)
+from dependencies import rate_limit_key  # per learner, see dependencies.py
+limiter = Limiter(key_func=rate_limit_key)
 
 router = APIRouter(prefix="/api/v1/ai/voice", tags=["Voice AI"])
 

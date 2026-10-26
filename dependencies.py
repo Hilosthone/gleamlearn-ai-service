@@ -37,6 +37,7 @@ import asyncio
 import hmac
 import io
 import os
+import re
 import zipfile
 from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
@@ -45,7 +46,9 @@ import requests
 
 from fastapi import Header, HTTPException
 from pydantic import BaseModel
+import openai
 from openai import AsyncOpenAI
+from slowapi.util import get_remote_address
 from pypdf import PdfReader
 
 
@@ -124,10 +127,7 @@ async def generate_ai_response(
         )
         content = completion.choices[0].message.content or ""
     except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"NVIDIA AI generation failed: {str(e)}",
-        )
+        raise provider_error(e)
 
     if require_content and not content:
         raise HTTPException(
@@ -409,3 +409,59 @@ async def fetch_document_text(file_url: str) -> str:
 
     data, content_type = await asyncio.to_thread(_download_document, file_url)
     return await asyncio.to_thread(extract_document_text, data, content_type, file_url)
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting and provider errors
+# ---------------------------------------------------------------------------
+
+#: Set by the GleamLearn backend on every call (it is the only client, and must send AI_API_KEY).
+USER_HEADER = "x-gleamlearn-user"
+_USER_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+
+
+def rate_limit_key(request) -> str:
+    """
+    Rate-limit per learner. Every request comes from the backend, so keying by remote address made all learners
+    share one limit (one learner's usage returned 429 to everyone). The header is only honoured on requests that
+    pass the API-key dependency, which FastAPI resolves before the limit is checked.
+    """
+    user = (request.headers.get(USER_HEADER) or "").strip()
+    if _USER_ID.match(user):
+        return f"user:{user}"
+    return f"ip:{get_remote_address(request)}"
+
+
+def _retry_after(e) -> int | None:
+    try:
+        raw = getattr(getattr(e, "response", None), "headers", {}).get("retry-after")
+        n = int(float(raw)) if raw is not None else None
+        return n if n and n > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def provider_error(e: Exception) -> HTTPException:
+    """
+    Classifies a model-provider failure. The provider's own message is logged, never returned (it can contain
+    account details). Codes are read by the backend to tell the learner what actually happened.
+    """
+    print(f"[provider] {type(e).__name__}: {str(e)[:300]}")
+    if isinstance(e, openai.RateLimitError):
+        body = getattr(e, "body", None)
+        text = f"{body} {e}".lower()
+        if "insufficient_quota" in text or "quota" in text or "credit" in text:
+            return HTTPException(status_code=503, detail={"code": "AI_PROVIDER_QUOTA_EXHAUSTED", "message": "The AI provider quota is used up."})
+        wait = _retry_after(e)
+        return HTTPException(
+            status_code=503,
+            detail={"code": "AI_PROVIDER_RATE_LIMITED", "message": "The AI provider is rate-limiting requests.", **({"retryAfterSeconds": wait} if wait else {})},
+            headers={"Retry-After": str(wait)} if wait else None,
+        )
+    if isinstance(e, (openai.AuthenticationError, openai.PermissionDeniedError)):
+        return HTTPException(status_code=502, detail={"code": "AI_PROVIDER_AUTH", "message": "The AI provider rejected the service credentials."})
+    if isinstance(e, openai.APITimeoutError):
+        return HTTPException(status_code=504, detail={"code": "AI_PROVIDER_TIMEOUT", "message": "The AI provider timed out."})
+    if isinstance(e, openai.APIConnectionError):
+        return HTTPException(status_code=503, detail={"code": "AI_PROVIDER_UNREACHABLE", "message": "The AI provider could not be reached."})
+    return HTTPException(status_code=502, detail={"code": "AI_PROVIDER_ERROR", "message": "AI generation failed."})

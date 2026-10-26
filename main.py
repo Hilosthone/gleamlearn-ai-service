@@ -72,10 +72,11 @@ load_dotenv()
 from fastapi import FastAPI, Request
 from datetime import datetime, timezone
 
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
+from dependencies import rate_limit_key
 from routers import (
     documents,
     quizzes,
@@ -89,7 +90,7 @@ from routers import (
     youtube,
 )
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=rate_limit_key)  # per learner, see dependencies.rate_limit_key
 
 app = FastAPI(
     title="GleamLearn AI Microservice",
@@ -98,10 +99,22 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(
-    RateLimitExceeded,
-    _rate_limit_exceeded_handler,
-)
+
+
+async def rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
+    """429 with a standard Retry-After and a code, instead of slowapi's body without a wait time."""
+    try:
+        wait = int(exc.limit.limit.get_expiry())
+    except Exception:
+        wait = 60
+    return JSONResponse(
+        status_code=429,
+        content={"detail": {"code": "AI_RATE_LIMITED", "message": f"Rate limit exceeded: {exc.detail}", "retryAfterSeconds": wait}},
+        headers={"Retry-After": str(wait)},
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded)
 
 app.include_router(documents.router)
 app.include_router(quizzes.router)

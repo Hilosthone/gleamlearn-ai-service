@@ -243,7 +243,8 @@ from dependencies import (
     feature_unavailable,
 )
 
-limiter = Limiter(key_func=get_remote_address)
+from dependencies import rate_limit_key  # per learner, see dependencies.py
+limiter = Limiter(key_func=rate_limit_key)
 
 router = APIRouter(prefix="/api/v1", tags=["Document AI Pipeline"])
 
