@@ -69,6 +69,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import time
+
 from fastapi import FastAPI, Request
 from datetime import datetime, timezone
 
@@ -76,8 +78,9 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
-from dependencies import rate_limit_key
+from dependencies import limiter
 from routers import (
+    learn,
     documents,
     quizzes,
     tests,
@@ -90,8 +93,6 @@ from routers import (
     youtube,
 )
 
-limiter = Limiter(key_func=rate_limit_key)  # per learner, see dependencies.rate_limit_key
-
 app = FastAPI(
     title="GleamLearn AI Microservice",
     description="High-performance backend microservice powering automated study pipelines, quizzes, and interactive live classes.",
@@ -101,12 +102,22 @@ app = FastAPI(
 app.state.limiter = limiter
 
 
+def _seconds_left(request: Request, exc: RateLimitExceeded) -> int:
+    """Seconds until this learner's window resets (falls back to the window length)."""
+    try:
+        item, args = request.state.view_rate_limit
+        reset_at, _remaining = limiter.limiter.get_window_stats(item, *args)
+        return max(1, int(reset_at - time.time()) + 1)
+    except Exception:
+        try:
+            return int(exc.limit.limit.get_expiry())
+        except Exception:
+            return 60
+
+
 async def rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
     """429 with a standard Retry-After and a code, instead of slowapi's body without a wait time."""
-    try:
-        wait = int(exc.limit.limit.get_expiry())
-    except Exception:
-        wait = 60
+    wait = _seconds_left(request, exc)
     return JSONResponse(
         status_code=429,
         content={"detail": {"code": "AI_RATE_LIMITED", "message": f"Rate limit exceeded: {exc.detail}", "retryAfterSeconds": wait}},
@@ -116,6 +127,7 @@ async def rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
 
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded)
 
+app.include_router(learn.router)
 app.include_router(documents.router)
 app.include_router(quizzes.router)
 app.include_router(tests.router)

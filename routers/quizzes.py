@@ -185,8 +185,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 # Initialize rate limiter using client IP address
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(
     prefix="/api/v1/quizzes",
@@ -217,7 +216,7 @@ class QuizSubmitRequest(BaseModel, extra="allow"):
 
 
 @router.get("")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_quizzes(
     request: Request,
     authorization: str = Header(None),
@@ -236,7 +235,7 @@ async def get_quizzes(
 
 
 @router.post("")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def create_quiz(
     request: Request,
     payload: QuizRequest,
@@ -256,7 +255,7 @@ async def create_quiz(
     }
 
 @router.get("/attempts")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_user_quiz_attempts(
     request: Request,
     authorization: str = Header(None),
@@ -275,7 +274,7 @@ async def get_user_quiz_attempts(
 
 
 @router.get("/attempts/{attempt_id}")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_specific_quiz_attempt(
     request: Request,
     attempt_id: str,
@@ -294,7 +293,7 @@ async def get_specific_quiz_attempt(
     }
 
 @router.post("/generate")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_quiz_general(
     request: Request,
     payload: QuizRequest,
@@ -327,7 +326,7 @@ async def generate_quiz_general(
 
 
 @router.post("/generate-from-course")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_quiz_from_course(
     request: Request,
     payload: QuizRequest,
@@ -362,7 +361,7 @@ async def generate_quiz_from_course(
 
 
 @router.post("/generate-from-document")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_quiz_from_document(
     request: Request,
     payload: QuizRequest,
@@ -403,7 +402,7 @@ async def generate_quiz_from_document(
 
 
 @router.post("/generate-from-topic")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_quiz_from_topic(
     request: Request,
     payload: QuizRequest,
@@ -455,7 +454,7 @@ async def get_quiz_by_id(
 
 
 @router.patch("/{quiz_id}")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def update_quiz(
     request: Request,
     quiz_id: str,
@@ -477,7 +476,7 @@ async def update_quiz(
 
 
 @router.delete("/{quiz_id}")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def delete_quiz(
     request: Request,
     quiz_id: str,
@@ -496,7 +495,7 @@ async def delete_quiz(
     }
 
 @router.post("/{quiz_id}/start")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def start_quiz_attempt(
     request: Request,
     quiz_id: str,
@@ -520,7 +519,7 @@ async def start_quiz_attempt(
 
 
 @router.post("/{quiz_id}/submit")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def submit_quiz_attempt(
     request: Request,
     quiz_id: str,
@@ -549,7 +548,7 @@ async def submit_quiz_attempt(
 
 
 @router.get("/{quiz_id}/results")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_quiz_results(
     request: Request,
     quiz_id: str,

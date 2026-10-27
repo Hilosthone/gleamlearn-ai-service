@@ -243,15 +243,14 @@ from dependencies import (
     feature_unavailable,
 )
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(prefix="/api/v1", tags=["Document AI Pipeline"])
 
 
 @router.post("/ai/documents/{file_id}/analyze")
 @router.post("/analyze")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def analyze_document(
     request: Request,
     payload: AiRequest,
@@ -283,7 +282,7 @@ async def analyze_document(
 
 
 @router.get("/ai/documents/{file_id}/analysis")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_document_analysis(
     request: Request,
     file_id: str,
@@ -296,7 +295,7 @@ async def get_document_analysis(
 
 @router.post("/ai/documents/{file_id}/generate-notes")
 @router.post("/generate-notes")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_notes(
     request: Request,
     payload: AiRequest,
@@ -330,7 +329,7 @@ async def generate_notes(
 
 @router.post("/ai/documents/{file_id}/generate-summary")
 @router.post("/generate-summary")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_summary(
     request: Request,
     payload: AiRequest,
@@ -363,7 +362,7 @@ async def generate_summary(
 
 @router.post("/ai/documents/{file_id}/generate-flashcards")
 @router.post("/generate-flashcards")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_flashcards(
     request: Request,
     payload: AiRequest,
@@ -398,7 +397,7 @@ async def generate_flashcards(
 
 @router.post("/ai/documents/{file_id}/generate-questions")
 @router.post("/generate-questions")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_questions(
     request: Request,
     payload: AiRequest,
@@ -431,7 +430,7 @@ async def generate_questions(
 
 @router.post("/ai/documents/{file_id}/generate-quiz")
 @router.post("/generate-quiz")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_quiz(
     request: Request,
     payload: AiRequest,
@@ -466,7 +465,7 @@ async def generate_quiz(
 
 @router.post("/ai/documents/{file_id}/generate-test")
 @router.post("/generate-test")
-@limiter.limit("3/minute")
+@limiter.limit("30/minute")
 async def generate_test(
     request: Request,
     payload: AiRequest,
@@ -499,7 +498,7 @@ async def generate_test(
 
 @router.post("/ai/documents/{file_id}/generate-exam")
 @router.post("/generate-exam")
-@limiter.limit("3/minute")
+@limiter.limit("30/minute")
 async def generate_exam(
     request: Request,
     payload: AiRequest,
@@ -533,7 +532,7 @@ async def generate_exam(
 
 @router.post("/ai/documents/{file_id}/create-course")
 @router.post("/create-course")
-@limiter.limit("3/minute")
+@limiter.limit("30/minute")
 async def create_course(
     request: Request,
     payload: AiRequest,
@@ -566,7 +565,7 @@ async def create_course(
 
 
 @router.get("/ai/documents/{file_id}/generated-content")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_generated_content(
     request: Request,
     file_id: str,
@@ -578,7 +577,7 @@ async def get_generated_content(
 
 
 @router.post("/ai/documents/{file_id}/generate-live-class")
-@limiter.limit("3/minute")
+@limiter.limit("30/minute")
 async def generate_live_class(
     request: Request,
     payload: AiRequest,
@@ -621,7 +620,7 @@ async def generate_live_class(
 
 
 @router.get("/ai/documents/{file_id}/live-class-stream")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_live_class_stream(
     request: Request,
     file_id: str,
@@ -633,7 +632,7 @@ async def get_live_class_stream(
 
 
 @router.post("/ai/documents/{file_id}/export-pdf")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def export_pdf(
     request: Request,
     payload: AiRequest,

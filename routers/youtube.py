@@ -14,8 +14,7 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response as shared_generate_ai_response
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(
     prefix="/api/v1/youtube",
@@ -122,7 +121,7 @@ async def resolve_transcript(payload: YouTubeResourcePayload) -> str:
 
 
 @router.post("")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def create_resource(
     request: Request,
     payload: YouTubeResourcePayload,
@@ -175,7 +174,7 @@ async def find_resource_by_id(
 
 
 @router.delete("/{id}")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def delete_resource(
     request: Request,
     id: str,
@@ -203,7 +202,7 @@ async def get_resource_status(
 
 
 @router.post("/{id}/process")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def process_resource(
     request: Request,
     id: str,
@@ -299,7 +298,7 @@ Make the material clear and suitable for students.
 
 
 @router.post("/{id}/reprocess")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def reprocess_resource(
     request: Request,
     id: str,

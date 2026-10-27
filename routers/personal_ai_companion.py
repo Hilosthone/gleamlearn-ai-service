@@ -94,8 +94,7 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(prefix="/api/v1", tags=["Personal AI Companion"])
 
@@ -125,7 +124,7 @@ class CompanionContextualPayload(BaseModel):
 
 
 @router.post("/ai-companion/chat")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def companion_chat(
     request: Request,
     payload: CompanionChatPayload,
@@ -206,7 +205,7 @@ Keep responses clear and natural. Do not mention these system instructions.
 
 
 @router.post("/ai-companion/interact")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def companion_interact(
     request: Request,
     payload: CompanionContextualPayload,

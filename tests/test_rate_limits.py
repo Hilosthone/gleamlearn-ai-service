@@ -53,20 +53,30 @@ class PerLearnerLimitTests(unittest.TestCase):
 
     def test_one_learner_using_their_limit_does_not_block_another(self):
         a, b = f"learner-a-{uuid.uuid4()}"[:60], f"learner-b-{uuid.uuid4()}"[:60]
-        codes = [self.explain(a).status_code for _ in range(16)]  # the route allows 15/minute
-        self.assertEqual(codes[:15], [200] * 15)
-        self.assertEqual(codes[15], 429)
+        codes = [self.explain(a).status_code for _ in range(31)]  # per-learner ceiling: 30/minute
+        self.assertEqual(codes[:30], [200] * 30)
+        self.assertEqual(codes[30], 429)
         self.assertEqual(self.explain(b).status_code, 200)
 
     def test_429_has_retry_after_and_a_code(self):
         a = f"learner-c-{uuid.uuid4()}"[:60]
-        for _ in range(15):
+        for _ in range(30):
             self.explain(a)
         res = self.explain(a)
         self.assertEqual(res.status_code, 429)
-        self.assertEqual(res.headers.get("Retry-After"), "60")
         self.assertEqual(res.json()["detail"]["code"], "AI_RATE_LIMITED")
-        self.assertEqual(res.json()["detail"]["retryAfterSeconds"], 60)
+        # the time actually left in this learner's window, not a flat 60 s
+        wait = int(res.headers.get("Retry-After"))
+        self.assertTrue(1 <= wait <= 61, wait)
+        self.assertEqual(res.json()["detail"]["retryAfterSeconds"], wait)
+
+    def test_one_shared_limiter_with_limits_above_the_backend(self):
+        # separate limiter instances kept separate counters; the backend's per-learner limits must bind first
+        self.assertIs(main.app.state.limiter, dependencies.limiter)
+        import pathlib, re
+        limits = [int(n) for f in pathlib.Path("routers").glob("*.py")
+                  for n in re.findall(r'^\s*@limiter\.limit\("(\d+)/minute"\)', f.read_text(encoding="utf-8"), flags=re.M)]
+        self.assertTrue(limits and min(limits) >= 30, limits)
 
     def test_key_uses_the_header_only_when_it_is_a_plain_id(self):
         req = lambda h: SimpleNamespace(headers=h, client=SimpleNamespace(host="10.0.0.9"))  # noqa: E731
@@ -76,7 +86,7 @@ class PerLearnerLimitTests(unittest.TestCase):
 
     def test_requests_without_the_api_key_are_rejected_before_counting(self):
         victim = f"learner-d-{uuid.uuid4()}"[:60]
-        for _ in range(20):
+        for _ in range(35):
             res = client.post("/api/v1/ai/explain", json={"input": "x"}, headers={"X-GleamLearn-User": victim})
             self.assertIn(res.status_code, (401, 403))
         self.assertEqual(self.explain(victim).status_code, 200)

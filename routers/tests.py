@@ -93,8 +93,7 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token, fetch_document_text, generate_ai_response as shared_generate_ai_response
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(prefix="/api/v1/tests", tags=["AI Tests Generation"])
 
@@ -132,7 +131,7 @@ def parse_json_response(content: str):
 
 
 @router.post("/generate", dependencies=[Depends(verify_token)])
-@limiter.limit("3/minute")
+@limiter.limit("30/minute")
 async def generate_test(
     request: Request,
     payload: TestGenPayload,
@@ -178,7 +177,7 @@ Make the questions academically useful and avoid duplicates.
 
 
 @router.post("/generate-from-course", dependencies=[Depends(verify_token)])
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_test_from_course(
     request: Request,
     payload: TestGenPayload,
@@ -233,7 +232,7 @@ Cover the major concepts that should be assessed in the course.
 
 
 @router.post("/generate-from-document", dependencies=[Depends(verify_token)])
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_test_from_document(
     request: Request,
     payload: TestGenPayload,

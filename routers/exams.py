@@ -67,8 +67,7 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token, fetch_document_text, generate_ai_response as shared_generate_ai_response
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(prefix="/api/v1/exams", tags=["AI Examination Engine"])
 
@@ -98,7 +97,7 @@ async def generate_exam_with_ai(prompt: str):
 
 
 @router.post("/generate", dependencies=[Depends(verify_token)])
-@limiter.limit("3/minute")
+@limiter.limit("30/minute")
 async def generate_exam(
     request: Request,
     payload: ExamGenPayload,
@@ -152,7 +151,7 @@ Ensure every question has one unambiguous correct answer.
 
 
 @router.post("/generate-from-course", dependencies=[Depends(verify_token)])
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_exam_from_course(
     request: Request,
     payload: ExamGenPayload,
@@ -214,7 +213,7 @@ Cover the major concepts and progressively vary question difficulty.
 
 
 @router.post("/generate-from-document", dependencies=[Depends(verify_token)])
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def generate_exam_from_document(
     request: Request,
     payload: ExamGenPayload,

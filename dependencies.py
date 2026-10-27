@@ -106,15 +106,33 @@ client = AsyncOpenAI(
 )
 
 
+MAX_HISTORY_TURNS = 12
+MAX_HISTORY_CHARS = 4000
+
+
+def clean_history(history) -> list:
+    """Earlier turns of a conversation, oldest first: only user/assistant text, capped in number and length."""
+    out = []
+    for turn in (history or [])[-MAX_HISTORY_TURNS:]:
+        if not isinstance(turn, dict):
+            continue
+        role = turn.get("role")
+        content = turn.get("content")
+        if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+            out.append({"role": role, "content": content.strip()[:MAX_HISTORY_CHARS]})
+    return out
+
+
 async def generate_ai_response(
     system_prompt: str,
     user_prompt: str,
     require_content: bool = False,
+    history=None,
 ) -> str:
     """
-    Sends one system + user prompt to the configured NVIDIA NIM model without
-    blocking the event loop. Returns the message text ("" when empty), raises
-    502 on provider failure, and on an empty response when require_content=True.
+    Sends a system prompt, optional earlier turns (history) and the user prompt to the configured NVIDIA NIM
+    model without blocking the event loop. Returns the message text ("" when empty), raises on provider failure
+    (see provider_error), and on an empty response when require_content=True.
     """
 
     try:
@@ -122,6 +140,7 @@ async def generate_ai_response(
             model=NVIDIA_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
+                *clean_history(history),
                 {"role": "user", "content": user_prompt},
             ],
         )
@@ -465,3 +484,12 @@ def provider_error(e: Exception) -> HTTPException:
     if isinstance(e, openai.APIConnectionError):
         return HTTPException(status_code=503, detail={"code": "AI_PROVIDER_UNREACHABLE", "message": "The AI provider could not be reached."})
     return HTTPException(status_code=502, detail={"code": "AI_PROVIDER_ERROR", "message": "AI generation failed."})
+
+
+#: The one limiter every router uses (separate instances had separate counters, and the 429 handler could not
+#: tell how long was left). Keyed per learner (rate_limit_key). The GleamLearn backend enforces the per-learner
+#: usage limits learners see; the limits here are a ceiling above them, so they only trigger if something
+#: bypasses the backend.
+from slowapi import Limiter  # noqa: E402
+
+limiter = Limiter(key_func=rate_limit_key)

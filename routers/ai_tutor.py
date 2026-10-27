@@ -89,8 +89,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(prefix="/api/v1/ai-tutor", tags=["AI Tutor Classroom"])
 
@@ -100,13 +99,15 @@ router = APIRouter(prefix="/api/v1/ai-tutor", tags=["AI Tutor Classroom"])
 
 class TutorPayload(BaseModel):
     message: Optional[str] = None
+    # earlier turns of this tutor session, oldest first: [{role: user|assistant, content}]
+    history: Optional[list] = None
     sessionId: Optional[str] = None
     input: Optional[str] = None
     context: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 @router.post("/message")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def tutor_message(
     request: Request,
     payload: TutorPayload,
@@ -124,9 +125,11 @@ async def tutor_message(
             "Teach students clearly, accurately, patiently, and step-by-step. "
             "Use simple language where appropriate. "
             "Give examples and analogies when they improve understanding. "
-            "Do not unnecessarily repeat the student's question."
+            "Do not unnecessarily repeat the student's question. "
+            "Continue from the earlier turns of this session when they are given."
         ),
         user_prompt=f"{msg}{context}",
+        history=payload.history,
     )
 
     return {
@@ -138,7 +141,7 @@ async def tutor_message(
 
 
 @router.post("/teach")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def ai_teach(
     request: Request,
     payload: TutorPayload,
@@ -170,7 +173,7 @@ async def ai_teach(
 
 
 @router.post("/explain")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def ai_tutor_explain(
     request: Request,
     payload: TutorPayload,
@@ -202,7 +205,7 @@ async def ai_tutor_explain(
 
 
 @router.post("/generate-diagram")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def ai_generate_diagram(
     request: Request,
     payload: TutorPayload,
@@ -235,7 +238,7 @@ async def ai_generate_diagram(
 
 
 @router.post("/drawing-instructions")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def ai_drawing_instructions(
     request: Request,
     payload: TutorPayload,

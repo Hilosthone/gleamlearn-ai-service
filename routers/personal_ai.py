@@ -118,8 +118,7 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(prefix="/api/v1", tags=["AI Personal Assistant"])
 
@@ -129,6 +128,8 @@ router = APIRouter(prefix="/api/v1", tags=["AI Personal Assistant"])
 class ChatPayload(BaseModel):
     message: str
     conversationId: Optional[str] = None
+    # earlier turns of this conversation, oldest first: [{role: user|assistant, content}]
+    history: Optional[list] = None
 
 
 class ContextualPayload(BaseModel):
@@ -143,7 +144,7 @@ class EvaluatePayload(BaseModel):
 
 
 @router.post("/chat")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def ai_chat(
     request: Request,
     payload: ChatPayload,
@@ -157,6 +158,7 @@ async def ai_chat(
             "Be accurate, clear, friendly, and concise."
         ),
         user_prompt=payload.message,
+        history=payload.history,
     )
 
     return {
@@ -167,7 +169,7 @@ async def ai_chat(
 
 
 @router.post("/ai/explain")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def ai_explain(
     request: Request,
     payload: ContextualPayload,
@@ -196,7 +198,7 @@ async def ai_explain(
 
 
 @router.post("/ai/summarize")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def ai_summarize(
     request: Request,
     payload: ContextualPayload,
@@ -226,7 +228,7 @@ async def ai_summarize(
 
 
 @router.post("/ai/generate-example")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def ai_generate_example(
     request: Request,
     payload: ContextualPayload,
@@ -255,7 +257,7 @@ async def ai_generate_example(
 
 
 @router.post("/ai/generate-practice")
-@limiter.limit("15/minute")
+@limiter.limit("30/minute")
 async def ai_generate_practice(
     request: Request,
     payload: ContextualPayload,
@@ -284,7 +286,7 @@ async def ai_generate_practice(
 
 
 @router.post("/ai/evaluate-answer")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def ai_evaluate_answer(
     request: Request,
     payload: EvaluatePayload,
@@ -318,7 +320,7 @@ async def ai_evaluate_answer(
 
 
 @router.post("/ai/explain-mistake")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def ai_explain_mistake(
     request: Request,
     payload: EvaluatePayload,

@@ -67,8 +67,7 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response as shared_generate_ai_response, feature_unavailable
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(prefix="/api/v1/ai/voice", tags=["Voice AI"])
 
@@ -90,7 +89,7 @@ async def generate_ai_response(system_prompt: str, user_prompt: str) -> str:
 
 
 @router.post("/transcribe")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def voice_transcribe(
     request: Request,
     payload: VoicePayload,
@@ -100,7 +99,7 @@ async def voice_transcribe(
 
 
 @router.post("/respond")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def voice_respond(
     request: Request,
     payload: VoicePayload,
@@ -133,7 +132,7 @@ async def voice_respond(
 
 
 @router.post("/synthesize")
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def voice_synthesize(
     request: Request,
     payload: VoicePayload,

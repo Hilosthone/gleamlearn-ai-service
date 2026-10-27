@@ -95,8 +95,7 @@ from slowapi.util import get_remote_address
 
 from dependencies import client, NVIDIA_MODEL, verify_token as verify_api_key, generate_ai_response, feature_unavailable
 
-from dependencies import rate_limit_key  # per learner, see dependencies.py
-limiter = Limiter(key_func=rate_limit_key)
+from dependencies import limiter  # shared per-learner limiter, see dependencies.py
 
 router = APIRouter(
     prefix="/api/v1/recommendations",
@@ -107,7 +106,7 @@ router = APIRouter(
 
 
 @router.get("")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def get_all_recommendations(
     request: Request,
     api_key: str = Security(verify_api_key),
@@ -116,7 +115,7 @@ async def get_all_recommendations(
 
 
 @router.get("/courses")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def recommend_courses(
     request: Request,
     api_key: str = Security(verify_api_key),
@@ -125,7 +124,7 @@ async def recommend_courses(
 
 
 @router.get("/topics")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def recommend_topics(
     request: Request,
     api_key: str = Security(verify_api_key),
@@ -134,7 +133,7 @@ async def recommend_topics(
 
 
 @router.get("/quizzes")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def recommend_quizzes(
     request: Request,
     api_key: str = Security(verify_api_key),
@@ -143,7 +142,7 @@ async def recommend_quizzes(
 
 
 @router.get("/revision")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def recommend_revision(
     request: Request,
     api_key: str = Security(verify_api_key),
@@ -152,7 +151,7 @@ async def recommend_revision(
 
 
 @router.get("/exams")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def recommend_exams(
     request: Request,
     api_key: str = Security(verify_api_key),
