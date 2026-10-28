@@ -14,6 +14,7 @@ import re
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Request, Security
+from visual_spec import REGISTRY_PROMPT, validate_visual_lesson
 from pydantic import BaseModel, Field
 
 from dependencies import (
@@ -113,8 +114,10 @@ class GenerateOptions(BaseModel):
 
 
 class GeneratePayload(BaseModel):
-    kind: Literal["lesson", "summary", "notes", "study_plan", "key_concepts", "explanation", "quiz", "exam", "flashcards", "course_plan"]
+    kind: Literal["lesson", "summary", "notes", "study_plan", "key_concepts", "explanation", "quiz", "exam", "flashcards", "course_plan", "visual_lesson"]
     text: str = Field(min_length=1)
+    # "topic": the learner named a topic only (visual lessons); taught from general knowledge, and the lesson says so
+    sourceMode: Literal["material", "topic"] = "material"
     title: Optional[str] = Field(default=None, max_length=200)
     options: GenerateOptions = Field(default_factory=GenerateOptions)
 
@@ -235,6 +238,10 @@ TEXT_PROMPTS = {
 @router.post("/generate")
 @limiter.limit("30/minute")
 async def generate(request: Request, payload: GeneratePayload, api_key: str = Security(verify_api_key)):
+    if payload.sourceMode == "topic" and payload.kind != "visual_lesson":
+        raise _error(422, "SOURCE_TOO_SHORT", "A topic on its own can only make a visual lesson.")
+    if payload.kind == "visual_lesson":
+        return await _visual_lesson(payload)
     if len(normalise_text(payload.text)) < 20:
         raise _error(422, "SOURCE_TOO_SHORT", "There is not enough material to learn from. Add more text.")
     src = await condensed_source(payload.text)
@@ -292,6 +299,46 @@ async def generate(request: Request, payload: GeneratePayload, api_key: str = Se
     if not modules:
         raise _error(502, "AI_BAD_OUTPUT", "The AI did not return a usable course plan. Please try again.")
     return {"status": "success", "kind": "course_plan", "modules": modules, "requested": count, "returned": len(modules), "sourceChars": src["chars"], "truncated": src["truncated"]}
+
+
+async def _visual_lesson(payload: GeneratePayload) -> Dict[str, Any]:
+    """A step-by-step lesson whose steps carry structured visuals from the closed registry in visual_spec.py."""
+    o = payload.options
+    ctx = _learner_context(o)
+    header = f"{ctx}\n\n" if ctx else ""
+    topic_mode = payload.sourceMode == "topic"
+    if topic_mode:
+        topic = normalise_text(payload.text).removeprefix("Topic:").strip()
+        if len(topic) < 3:
+            raise _error(422, "SOURCE_TOO_SHORT", "Name a topic to learn about.")
+        source_block = f"TOPIC: {topic[:300]}"
+        basis = ("Teach this topic from well-established knowledge suitable for the learner's level. If you are not "
+                 "confident about a fact, leave it out rather than guess.")
+        src = {"chars": len(topic), "truncated": False}
+    else:
+        if len(normalise_text(payload.text)) < 20:
+            raise _error(422, "SOURCE_TOO_SHORT", "There is not enough material to learn from. Add more text.")
+        src = await condensed_source(payload.text)
+        source_block = f"SOURCE ({payload.title or 'learner material'}):\n{src['source']}"
+        basis = GROUNDING
+    steps = max(2, min(o.count or 5, 8))
+    raw = await generate_ai_response(
+        system_prompt=(
+            f"You are GleamLearn's visual teacher. {basis} Teach in {steps} short, ordered steps; each step has a "
+            "title, a clear explanation (plain sentences, may use simple Markdown lists) and an optional visual.\n"
+            f"{REGISTRY_PROMPT}\n"
+            'Return ONLY JSON: {"title":"...","summary":"...","steps":[{"title":"...","explanation":"...","visual":{...}|null}],"keyTakeaways":["..."]}'
+        ),
+        user_prompt=f"{header}Create a visual lesson.\n\n{source_block}",
+        require_content=True,
+    )
+    lesson = validate_visual_lesson(parse_json_object(raw))
+    if not lesson:
+        raise _error(502, "AI_BAD_OUTPUT", "The AI did not return a usable visual lesson. Please try again.")
+    if topic_mode:
+        lesson["basis"] = "topic"  # the lesson is from general knowledge, not the learner's material
+    visuals = sum(1 for s in lesson["steps"] if s["visual"])
+    return {"status": "success", "kind": "visual_lesson", "lesson": lesson, "visuals": visuals, "sourceChars": src["chars"], "truncated": src["truncated"]}
 
 
 # ---------------------------------------------------------------------------------------------------------------
